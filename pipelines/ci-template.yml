@@ -1,0 +1,28 @@
+parameters:
+- name: serviceName
+  type: string
+
+- name: servicePath
+  type: string
+
+variables:
+  dockerRegistryServiceConnection: 'acr-connection' #create a connection between azure devops and container registry
+  imageRepository: '${{ parameters.serviceName }}'
+  dockerfilePath: '$(Build.SourcesDirectory)/${{ parameters.servicePath }}/Dockerfile'
+  tag: '$(Build.BuildId)'
+
+stages:
+- stage: BuildAndPush
+  jobs:
+  - job: BuildAndPush
+    pool:
+      name: 'agentpool'
+    steps:
+    - task: Docker@2
+      inputs:
+        command: buildAndPush
+        repository: $(imageRepository)
+        dockerfile: $(dockerfilePath)
+        containerRegistry: $(dockerRegistryServiceConnection)
+        tags: |
+          $(tag)
