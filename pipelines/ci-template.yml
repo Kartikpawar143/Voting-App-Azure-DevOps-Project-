@@ -6,23 +6,65 @@ parameters:
   type: string
 
 variables:
-  dockerRegistryServiceConnection: 'acr-connection' #create a connection between azure devops and container registry
+  acrLoginServer: 'cloudvotingacr.azurecr.io'
   imageRepository: '${{ parameters.serviceName }}'
-  dockerfilePath: '$(Build.SourcesDirectory)/${{ parameters.servicePath }}/Dockerfile'
   tag: '$(Build.BuildId)'
 
 stages:
-- stage: BuildAndPush
+- stage: BuildPushAndUpdate
+  displayName: Build, Push & Update
+
   jobs:
-  - job: BuildAndPush
+  - job: BuildPushUpdate
     pool:
-      name: 'agentpool'
+      name: 'devops-agent-pool'
+
     steps:
+
+    - checkout: self
+      persistCredentials: true
+
+    # 🔥 Build & Push (force fresh image)
     - task: Docker@2
+      displayName: Build and Push Image
       inputs:
         command: buildAndPush
         repository: $(imageRepository)
-        dockerfile: $(dockerfilePath)
-        containerRegistry: $(dockerRegistryServiceConnection)
+        dockerfile: $(Build.SourcesDirectory)/${{ parameters.servicePath }}/Dockerfile
+        containerRegistry: 'acr-connection'
         tags: |
           $(tag)
+        arguments: --no-cache
+
+    # 🔥 Update manifest
+    - script: |
+        sed -i 's/\r$//' $(Build.SourcesDirectory)/scripts/updatek8smanifest.sh
+        chmod +x $(Build.SourcesDirectory)/scripts/updatek8smanifest.sh
+
+        bash $(Build.SourcesDirectory)/scripts/updatek8smanifest.sh \
+        ${{ parameters.serviceName }} \
+        $(acrLoginServer)/$(imageRepository) \
+        $(tag)
+      displayName: Update Manifest
+
+    # 🔥 Commit YAML
+    - script: |
+        cd $BUILD_SOURCESDIRECTORY
+
+        git config user.email "devops@azure.com"
+        git config user.name "azure-pipeline"
+
+        git stash || echo "Nothing to stash"
+        git pull origin main --rebase
+        git stash pop || echo "Nothing to pop"
+
+        git add k8s-specifications/${{ parameters.serviceName }}-deployment.yaml
+        git commit -m "[skip ci] Update ${{ parameters.serviceName }} image to $(tag)" || echo "No changes"
+
+        git push origin HEAD:main
+      displayName: Commit YAML
+
+    # 🔥 Restart deployment
+    - script: |
+        kubectl rollout restart deployment ${{ parameters.serviceName }} || true
+      displayName: Restart Deployment
