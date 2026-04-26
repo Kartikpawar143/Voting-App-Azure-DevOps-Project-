@@ -1,16 +1,12 @@
-# write these pipeline in the azure devops pipeline UI no need to add in the code repo
-
 trigger:
   branches:
-    include:
-      - main
+    include: [ main ]
   paths:
-    include:
-      - result/**
+    include: [ result/** ]
 
 extends:
   template: pipelines/ci-template.yml
 
-  parameters:
-    serviceName: 'result-app'
-    servicePath: 'result'
+parameters:
+  serviceName: 'result'
+  servicePath: 'result'
