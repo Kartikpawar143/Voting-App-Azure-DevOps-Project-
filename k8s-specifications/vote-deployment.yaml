@@ -1,22 +1,29 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
+  name: vote
   labels:
     app: vote
-  name: vote
+
 spec:
   replicas: 1
   selector:
     matchLabels:
       app: vote
+
   template:
     metadata:
       labels:
         app: vote
+
     spec:
       containers:
-      - image: dockersamples/examplevotingapp_vote
-        name: vote
+      - name: vote
+        image: cloudvotingacr.azurecr.io/vote:latest   # pipeline will update tag
+
         ports:
         - containerPort: 80
-          name: vote
+
+        env:
+        - name: REDIS_HOST
+          value: redis
